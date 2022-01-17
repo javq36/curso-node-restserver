@@ -1,25 +1,35 @@
-const { response } = require("express");
+const { response, request } = require("express");
+const Usuario = require("../models/usuario");
+const bcrypt = require("bcryptjs");
 
-const usuariosGet = (req, res = response) => {
-  const {q, nombre, apikey, page = 1, limit} = req.query;
+const usuariosGet = async (req = request, res = response) => {
+  const { limite = 5, desde = 0 } = req.query;
+  const query = { estado: true };
+
+  const [total, usuarios] = await Promise.all([
+    Usuario.countDocuments(query),
+    Usuario.find(query).limit(Number(limite)).skip(Number(desde)),
+  ]);
 
   res.json({
-    msg: "get API - controlador",
-    q,
-    nombre,
-    apikey,
-    page,
-    limit
+    total,
+    usuarios,
   });
 };
 
-const usuariosPost = (req, res = response) => {
-  const { nombre, edad } = req.body;
+const usuariosPost = async (req, res = response) => {
+  const { nombre, correo, password, rol } = req.body;
+  const usuario = new Usuario({ nombre, correo, password, rol });
+
+  //Hacer hash de la pass
+  const salt = bcrypt.genSaltSync();
+  usuario.password = bcrypt.hashSync(password, salt);
+
+  //Guardar en DB
+  await usuario.save();
 
   res.json({
-    msg: "post API - controlador",
-    nombre,
-    edad,
+    usuario,
   });
 };
 
@@ -29,19 +39,38 @@ const usuariosPatch = (req, res = response) => {
   });
 };
 
-const usuariosDelete = (req, res = response) => {
+const usuariosDelete = async(req, res = response) => {
+
+  const { id } = req.params;
+
+  //Borrado Fisico
+ /*  const usuario = await Usuario.findByIdAndDelete( id );
+ */
+  //Borrado Logico
+
+  const usuario = await Usuario.findByIdAndUpdate(id, {estado: false})
+
   res.json({
-    msg: "delete API - controlador",
+    usuario,
+    id,
   });
 };
 
-const usuariosPut = (req, res = response) => {
-  const id = req.params.id;
+const usuariosPut = async (req, res = response) => {
+  const { id } = req.params;
+  const { _id, password, google, correo, ...resto } = req.body;
 
-  res.json({
-    msg: "put API - controlador",
-    id,
-  });
+  //TODO validar contra base de datos
+
+  if (password) {
+    //Hacer hash de la pass
+    const salt = bcrypt.genSaltSync();
+    resto.password = bcrypt.hashSync(password, salt);
+  }
+
+  const usuario = await Usuario.findByIdAndUpdate(id, resto);
+
+  res.json(usuario);
 };
 module.exports = {
   usuariosGet,
